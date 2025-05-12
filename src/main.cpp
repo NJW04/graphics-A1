@@ -6,11 +6,7 @@
 // function, and instead calls out to our code at this SDL_main, however on linux this is not
 // needed (since the entrypoint in linux is already called main) so to keep things portable
 // we need to check our environment at compile-time
-#ifdef __linux__
 int main(int argc, char** argv)
-#else
-int SDL_main(int argc, char** argv)
-#endif
 {
     if(SDL_Init(SDL_INIT_VIDEO) != 0)
     {

@@ -16,6 +16,14 @@ GeometryData geometry;
 GLuint vbo;
 GLint posLoc;
 GLuint transformLoc;
+int colorLoc;
+float earthAngle = 0.0f;  // Initial angle of Earth in orbit
+float earthDeltaAngle = 0.008f;    // Increment per frame
+
+float moonAngle = 0.0f;  // Initial angle of Earth in orbit
+float moonDeltaAngle = 0.1f;    // Increment per frame
+
+bool pause = false; // Make this 0 or 1 to stop the addition of deltaAngle to angle
 
 const char* glGetErrorString(GLenum error)
 {
@@ -157,11 +165,6 @@ void OpenGLWindow::initGL()
     shader = loadShaderProgram("simple.vert", "simple.frag");
     glUseProgram(shader);
 
-    // Getting the location of the colour uniform, and then setting the uniform to yellow by specifying the location and 3 floats for a colour value
-    // Can use these 2 lines to update the colour after loading in each sphere I think
-    int colorLoc = glGetUniformLocation(shader, "objectColor");
-    glUniform3f(colorLoc, 0.0f, 0.0f, 1.0f);
-
 
     // 1) Load the OBJ into our GeometryData instance and obtain number of vertices and pointer to vertices array
     geometry.loadFromOBJFile("sphere-fixed.obj");
@@ -186,13 +189,6 @@ void OpenGLWindow::initGL()
                           (void*)0);
     glEnableVertexAttribArray(0);
     
-
-    
-
-
-            
-
-
 }
 
 void OpenGLWindow::render()
@@ -200,35 +196,67 @@ void OpenGLWindow::render()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     transformLoc = glGetUniformLocation(shader, "transform");
-    //This is the draw function for the sun
+    colorLoc = glGetUniformLocation(shader, "objectColor");
+
+    // Draw the sun
     glm::mat4 sunTrans = glm::mat4(1.0f);
-    sunTrans = glm::scale(sunTrans, glm::vec3(0.5f,0.5f,0.5f));
+    sunTrans = glm::scale(sunTrans, glm::vec3(0.2f,0.2f,0.2f));
+
+    // This passes the matrix to the shader for the uniform variable transform
     glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(sunTrans));
+    glUniform3f(colorLoc, 1.0f, 1.0f, 0.0f);
     glDrawArrays(GL_TRIANGLES, 0, geometry.vertexCount());
 
-     // ---- Draw the Earth ----
-     static float angle = 0.0f;  // Initial angle of Earth in orbit (start at 0)
-     float deltaAngle = 10.0f;    // Increment per frame (adjust for speed)
- 
-     // Increment the angle
-     angle += deltaAngle;
-     
-     // Wrap around when the angle exceeds 360 degrees
-     if (angle >= 360.0f) {
-         angle -= 360.0f;
-     }
- 
-     glm::mat4 earthTrans = glm::mat4(1.0f);
- 
-     // Translate the Earth away from the Sun (Orbit radius)
-     earthTrans = glm::translate(earthTrans, glm::vec3(0.75f, 0.0f, 0.0f));
- 
-     // Rotate the Earth around the Sun (Z-axis in the x-y plane)
-     earthTrans = glm::rotate(earthTrans, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
- 
+    
+    // Draw the Earth 
+    if (!pause) {
+        earthAngle += earthDeltaAngle;
+    }
+    
+    // Starting Identity Matrix
+    glm::mat4 earthTrans = glm::mat4(1.0f);
 
-    earthTrans = glm::scale(earthTrans, glm::vec3(0.15f,0.15f,0.15f));
+    // Rotate the Earth around the Sun (Z-axis in the x-y plane)
+    earthTrans = glm::rotate(sunTrans, earthAngle, glm::vec3(0.0f, 0.0f, 1.0f));
+
+    // Translate the Earth away from the Sun (Orbit radius)
+    earthTrans = glm::translate(earthTrans, glm::vec3(2.5f, 0.0f, 0.0f));
+
+    // Scale the earth down, this is working off of the suns already existing scale
+    earthTrans = glm::scale(earthTrans, glm::vec3(0.5f,0.5f,0.5f));
+
+    // Pass in color and transform uniform variables
+    glUniform3f(colorLoc, 0.0f, 1.0f, 0.0f);
     glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(earthTrans));
+
+    glDrawArrays(GL_TRIANGLES, 0, geometry.vertexCount());
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Draw the Moon 
+    if (!pause) {
+        moonAngle += moonDeltaAngle;
+    }
+    //moonAngle += moonDeltaAngle * pause; //when pause = 0, moonAngle wont increase
+        
+    // Wrap around when the angle exceeds 360 degrees, if it goes > 360 then it is viewed as value - 360
+    // Scale -> Rotate -> Translate (BEN)
+    
+    
+
+
+    // Rotate the Earth around the Sun (Z-axis in the x-y plane)
+    earthTrans = glm::rotate(earthTrans, moonAngle, glm::vec3(0.0f, 0.0f, 1.0f));
+
+    // Translate the Moon away from the Earth
+    earthTrans = glm::translate(earthTrans, glm::vec3(2.0f, 0.0f, 0.0f));
+
+    earthTrans = glm::scale(earthTrans, glm::vec3(0.5f,0.5f,0.5f));
+
+
+
+    glUniform3f(colorLoc, 1.0f, 1.0f, 1.0f);
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(earthTrans));
+
     glDrawArrays(GL_TRIANGLES, 0, geometry.vertexCount());
 
     SDL_GL_SwapWindow(sdlWin);
@@ -239,11 +267,37 @@ bool OpenGLWindow::handleEvent(SDL_Event e)
     // A list of keycode constants is available here: https://wiki.libsdl.org/SDL_Keycode
     // Note that SDL provides both Scancodes (which correspond to physical positions on the keyboard)
     // and Keycodes (which correspond to symbols on the keyboard, and might differ across layouts)
-    if(e.type == SDL_KEYDOWN)
-    {
-        if(e.key.keysym.sym == SDLK_ESCAPE)
-        {
-            return false;
+    if (e.type == SDL_KEYDOWN) {
+        switch (e.key.keysym.sym) {
+            case SDLK_ESCAPE:
+                return false;
+            case SDLK_p:
+                pause = !pause;
+                break;
+            case SDLK_d:  // speed up earth
+                earthDeltaAngle += 0.005f;
+                break;
+            case SDLK_a:  // slow down earth
+                earthDeltaAngle -= 0.005;
+                if (earthDeltaAngle < 0) {
+                    earthDeltaAngle = 0;
+                  }
+                break;
+            case SDLK_s:  // reset earth to default
+                earthDeltaAngle = 0.01f;
+                break;
+            case SDLK_RIGHT: //Speed Up Moon
+                moonDeltaAngle += 0.01f;
+                break;
+            case SDLK_LEFT: // Slow Down Moon
+                moonDeltaAngle -= 0.01f;
+                if (moonDeltaAngle < 0) {
+                    moonDeltaAngle = 0;
+                  }
+                break;
+            case SDLK_DOWN: // Reset Moon to Default
+                moonDeltaAngle = 0.1f;
+                break;
         }
     }
     return true;

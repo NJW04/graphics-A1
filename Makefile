@@ -1,7 +1,7 @@
 CXX=g++
 CXXFLAGS= -c `sdl2-config --cflags` -std=c++11
-INCLUDES= -Iinclude
-LFLAGS= `sdl2-config --libs` -lGLEW -lGL
+INCLUDES= -Iinclude -I/opt/homebrew/opt/glm/include
+LFLAGS= `sdl2-config --libs` -lGLEW -framework OpenGL
 BUILDDIR=build
 SRCDIR=src
 SRC=$(wildcard $(SRCDIR)/*.cpp)
